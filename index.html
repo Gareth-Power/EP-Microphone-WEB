@@ -27,6 +27,11 @@
       cursor: pointer;
       font-family: 'Custom Font', sans-serif;
       min-height: 0; /* Added to allow button shrinking */
+      transition: background-color 0.2s ease; /* Added for smooth color transition */
+      user-select: none; /* Prevent text selection */
+      -moz-user-select: none; /* Firefox */
+      -webkit-user-select: none; /* Safari and Chrome */
+      -ms-user-select: none; /* IE/Edge */
     }
 
     .button.left {
@@ -37,6 +42,10 @@
     .button.right {
       background-color: red;
       color: white;
+    }
+
+    .button.hold {
+      filter: brightness(90%); /* Darkens the button color when held */
     }
 
     .dropdown-bar {
@@ -65,8 +74,8 @@
   </div>
 
   <div class="button-container">
-    <div class="button left" ontouchstart="handleButtonPress('left')" ontouchend="handleButtonRelease()" onmousedown="handleButtonPress('left')" onmouseup="handleButtonRelease()">Left</div>
-    <div class="button right" ontouchstart="handleButtonPress('right')" ontouchend="handleButtonRelease()" onmousedown="handleButtonPress('right')" onmouseup="handleButtonRelease()">Right</div>
+    <div class="button left" ontouchstart="handleButtonPress('left')" ontouchend="handleButtonRelease('left')" ontouchcancel="handleButtonRelease('left')" onmousedown="handleButtonPress('left')" onmouseup="handleButtonRelease('left')">Left</div>
+    <div class="button right" ontouchstart="handleButtonPress('right')" ontouchend="handleButtonRelease('right')" ontouchcancel="handleButtonRelease('right')" onmousedown="handleButtonPress('right')" onmouseup="handleButtonRelease('right')">Right</div>
   </div>
 
   <script>
@@ -82,26 +91,38 @@
       var pannerNode;
       var leftGainNode;
       var rightGainNode;
+      var microphonePermissionRequested = false;
 
       function initApp() {
+        if (!microphonePermissionRequested) {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function (stream) {
+              microphonePermissionRequested = true;
+              enumerateAudioDevices();
+            })
+            .catch(function (error) {
+              console.log('Error: Failed to get microphone permission:', error);
+            });
+        } else {
+          enumerateAudioDevices();
+        }
+      }
+
+      function enumerateAudioDevices() {
         navigator.mediaDevices.enumerateDevices()
           .then(function (devices) {
             var audioDevices = devices.filter(function (device) {
-              return device.kind === 'audioinput';
+              return device.kind === 'audioinput' && device.deviceId !== '';
             });
 
             var selectElement = document.getElementById('microphone-selector');
+            selectElement.innerHTML = ''; // Clear existing options
 
             audioDevices.forEach(function (device) {
               var option = document.createElement('option');
               option.value = device.deviceId;
-              option.text = device.label || 'Microphone ' + (selectElement.length + 1);
+              option.text = device.deviceId; // Use device.deviceId as the display text
               selectElement.appendChild(option);
-            });
-
-            selectElement.addEventListener('change', function (event) {
-              var selectedDeviceId = event.target.value;
-              handleMicrophoneChange(selectedDeviceId);
             });
 
             if (audioDevices.length > 0) {
@@ -138,20 +159,38 @@
       }
 
       function handleButtonPress(channel) {
-        pannerNode.connect(audioContext.destination);
+        if (!microphonePermissionRequested) {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function (stream) {
+              microphonePermissionRequested = true;
+              enumerateAudioDevices();
+              handleButtonPress(channel);
+            })
+            .catch(function (error) {
+              console.log('Error: Failed to get microphone permission:', error);
+            });
+        } else {
+          var button = document.querySelector('.button.' + channel);
+          button.classList.add('hold');
 
-        if (channel === 'left') {
-          pannerNode.pan.value = -1;
-        } else if (channel === 'right') {
-          pannerNode.pan.value = 1;
-        }
+          pannerNode.connect(audioContext.destination);
 
-        if (audioContext.state === 'suspended') {
-          audioContext.resume();
+          if (channel === 'left') {
+            pannerNode.pan.value = -1;
+          } else if (channel === 'right') {
+            pannerNode.pan.value = 1;
+          }
+
+          if (audioContext.state === 'suspended') {
+            audioContext.resume();
+          }
         }
       }
 
-      function handleButtonRelease() {
+      function handleButtonRelease(channel) {
+        var button = document.querySelector('.button.' + channel);
+        button.classList.remove('hold');
+
         pannerNode.disconnect(audioContext.destination);
         pannerNode.pan.value = 0; // Reset pan to center
       }
