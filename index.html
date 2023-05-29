@@ -112,7 +112,7 @@
         navigator.mediaDevices.enumerateDevices()
           .then(function (devices) {
             var audioDevices = devices.filter(function (device) {
-              return device.kind === 'audioinput' && device.deviceId !== '';
+              return device.kind === 'audioinput';
             });
 
             var selectElement = document.getElementById('microphone-selector');
@@ -121,8 +121,13 @@
             audioDevices.forEach(function (device) {
               var option = document.createElement('option');
               option.value = device.deviceId;
-              option.text = device.deviceId; // Use device.deviceId as the display text
+              option.text = device.label || 'Microphone ' + (selectElement.length + 1);
               selectElement.appendChild(option);
+            });
+
+            selectElement.addEventListener('change', function (event) {
+              var selectedDeviceId = event.target.value;
+              handleMicrophoneChange(selectedDeviceId);
             });
 
             if (audioDevices.length > 0) {
@@ -200,3 +205,4 @@
   </script>
 </body>
 </html>
+
